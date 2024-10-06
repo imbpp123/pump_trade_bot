@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/gofor-little/env"
 
-	"trade_bot/internal/domain"
+	"trade_bot/internal/client"
 )
 
 func main() {
@@ -20,47 +21,67 @@ func main() {
 		panic(err)
 	}
 
+	mexcClient := client.NewMexc(
+		env.Get("MEXC_API_KEY", ""),
+		env.Get("MEXC_API_SECRET", ""),
+	)
+	fmt.Println(mexcClient.GetCurrencyPriceTicker(ctx, "BTCUSDT"))
+
 	/*
-		mexcClient := client.NewMexc(
-			env.Get("MEXC_API_KEY", ""),
-			env.Get("MEXC_API_SECRET", ""),
-		)
+		currency := "BTCUSDT"
+		candleRepository := repository.NewCandle()
 
-		assetRepository := repository.NewAsset()
-		assetService := domain.NewAsset(mexcClient, assetRepository)
+		candleService := domain.NewCandle(mexcClient, candleRepository)
 
+		if err := candleService.StartUpdate(ctx); err != nil {
+			panic(err)
+		}
+		candleService.SubscribeForUpdate(ctx, currency)
+		time.Sleep(time.Second)
+		fmt.Println(candleService.GetCandle(ctx, currency))
+	*/
+	/*
 		// run account asset update for repository in background
+		assetService := domain.NewAsset(mexcClient, repository.NewAsset())
 		go func() {
 			if err := assetService.RunUpdate(ctx); err != nil {
 				panic(err)
 			}
 		}()
-	*/
-	
-	tgClient := domain.NewChat(nil)
-	tgClient.WaitForPumpMessage(ctx, "test")
 
-	/*
-		// run tg channel check for crypto name in background
-		tgClient := client.NewTelegram(
-			env.Get("TELEGRAM_API_ID", ""),
-			env.Get("TELEGRAM_API_HASH", ""),
-		)
+		// run telegram as chat
+		chanMessageIn := make(types.ChannelMessageIn)
+		appIDStr, err := strconv.Atoi(env.Get("TELEGRAM_APP_ID", ""))
+		if err != nil {
+			panic(err)
+		}
+		tgClient, err := client.NewTelegram(client.TelegramOptions{
+			AppID:    appIDStr,
+			ApiHash:  env.Get("TELEGRAM_API_HASH", ""),
+			Phone:    env.Get("TELEGRAM_PHONE", ""),
+			SQLiteDb: env.Get("TELEGRAM_SQLITE_DB", ""),
+			Context:  ctx,
+		})
+		if err != nil {
+			panic(err)
+		}
+		tgClient.StartRecvMessages(ctx, chanMessageIn)
 
-		tgService := domain.NewTelegram(tgClient)
-		tgService.WaitForCurrency(ctx)
+		// let's do the pump!
 
-		time.Sleep(time.Minute)
-	*/
-	/*
-		// run tg channel check for crypto name in background
-		tg := client.NewTelegram()
+		// get currency from chat
+		chatService := domain.NewChat()
+		currency, err := chatService.WaitForPumpCurrency(ctx, chanMessageIn)
+		if err != nil {
+			panic(err)
+		}
 
-		tgService := domain.NewTelegram(tg)
-		tgService.WaitForCurrency(ctx)
+		// do the job!
 
-		// run process pump-dump
-		pumpService := domain.NewPump(tgService, assetService)
-		pumpService.PumpDumpIt(ctx)
+
+		// stop everything
+		tgClient.Stop(ctx)
+		close(chanMessageIn)
+
 	*/
 }

@@ -3,63 +3,40 @@ package domain
 import (
 	"context"
 	"fmt"
-	"log"
-
-	"github.com/celestix/gotgproto"
-	"github.com/celestix/gotgproto/dispatcher/handlers"
-	"github.com/celestix/gotgproto/dispatcher/handlers/filters"
-	"github.com/celestix/gotgproto/ext"
-	"github.com/celestix/gotgproto/sessionMaker"
-	"github.com/glebarez/sqlite"
+	"strings"
+	"trade_bot/internal/types"
 )
 
-type chatClient interface {
+type Chat struct{}
+
+func NewChat() *Chat {
+	return &Chat{}
 }
 
-type Chat struct {
-	client chatClient
-}
+func (c *Chat) WaitForPumpCurrency(ctx context.Context, channel types.ChannelMessageIn) (string, error) {
+	searchString := "Next message is the coin name"
+	var prevMsg *types.ChatMessageIn
 
-func NewChat(client chatClient) *Chat {
-	return &Chat{
-		client: client,
+	fmt.Println("Wait for message")
+
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case msg := <-channel:
+			if msg == nil {
+				continue
+			}
+
+			if prevMsg == nil {
+				if strings.Contains(msg.Text, searchString) {
+					fmt.Println("PrePump message detected!", msg.Text)
+					prevMsg = msg
+					break
+				}
+			} else if prevMsg.ChatID != nil && msg.ChatID != nil && *prevMsg.ChatID == *msg.ChatID {
+				return msg.Text, nil
+			}
+		}
 	}
-}
-
-func (c *Chat) WaitForPumpMessage(ctx context.Context, channel string) error {
-	client, err := gotgproto.NewClient(
-		// Get AppID from https://my.telegram.org/apps
-		4723758,
-		// Get ApiHash from https://my.telegram.org/apps
-		"0fb8a49cb3655abfbb77d311627d106f",
-		// ClientType, as we defined above
-		gotgproto.ClientTypePhone("+4915257015190"),
-		// Optional parameters of client
-		&gotgproto.ClientOpts{
-			//Session: sessionMaker.SimpleSession(),
-			Session: sessionMaker.SqlSession(sqlite.Open("userbot")),
-		},
-	)
-	if err != nil {
-		log.Fatalln("failed to start client:", err)
-	}
-
-	fmt.Printf("client (@%s) has been started...\n", client.Self.Username)
-
-	clientDispatcher := client.Dispatcher
-	clientDispatcher.AddHandlerToGroup(handlers.NewMessage(filters.Message.Text, download), 1)
-
-	err = client.Idle()
-	if err != nil {
-		log.Fatalln("failed to start client:", err)
-	}
-
-	return nil
-}
-
-func download(ctx *ext.Context, update *ext.Update) error {
-	msg := update.EffectiveMessage
-
-	fmt.Println(msg.FromID, msg.PeerID, msg.Text)
-	return nil
 }
