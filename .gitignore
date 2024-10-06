@@ -1,0 +1,5 @@
+/.env
+userbot
+/vendor
+/.vscode
+.DS_Store
