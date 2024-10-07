@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"mexc-sdk/mexcsdk"
@@ -12,9 +13,23 @@ import (
 	"trade_bot/internal/types"
 )
 
+const (
+	mexcParallelRequestQTY      int           = 25
+	mexcRequestWindow           time.Duration = 10 * time.Second
+	mexcMaxRequestPerWindow     int           = 500
+	mexcRequestCoolDownDuration time.Duration = 50 * time.Millisecond
+)
+
+type requestFunc chan func() error
+
 type Mexc struct {
 	clientSpot   mexcsdk.Spot
 	clientMarket mexcsdk.Market
+
+	requestChan requestFunc
+	requests    []time.Time
+	requestWg   sync.WaitGroup
+	requestsMu  sync.Mutex
 }
 
 var mexcIntervals = map[types.CandleInterval]string{
@@ -37,13 +52,46 @@ func NewMexc(
 	clientSpot := mexcsdk.NewSpot(&apiKey, &apiSecret)
 	clientMarket := mexcsdk.NewMarket(&apiKey, &apiSecret)
 
-	return &Mexc{
+	m := &Mexc{
 		clientSpot:   clientSpot,
 		clientMarket: clientMarket,
+		requestChan:  make(requestFunc),
 	}
+
+	for i := 0; i < mexcParallelRequestQTY; i++ {
+		m.requestWg.Add(1)
+		go m.processRequest()
+	}
+
+	return m
 }
 
 func (m *Mexc) GetCurrencyPriceTicker(ctx context.Context, currency string) (*types.CurrencyPrice, error) {
+	response := make(chan *types.CurrencyPrice, 1)
+	errChan := make(chan error, 1)
+
+	m.requestChan <- func() error {
+		result, err := m.requestCurrencyPriceTicker(ctx, currency)
+		if err != nil {
+			errChan <- err
+			return err
+		}
+
+		response <- result
+		return nil
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case price := <-response:
+		return price, nil
+	case err := <-errChan:
+		return nil, err
+	}
+}
+
+func (m *Mexc) requestCurrencyPriceTicker(_ context.Context, currency string) (*types.CurrencyPrice, error) {
 	info := m.clientMarket.TickerPrice(&currency)
 
 	data, ok := info.(map[string]interface{})
@@ -68,6 +116,31 @@ func (m *Mexc) GetCurrencyPriceTicker(ctx context.Context, currency string) (*ty
 }
 
 func (m *Mexc) GetCurrencyCandles(ctx context.Context, currency string, interval types.CandleInterval) ([]types.Candle, error) {
+	response := make(chan []types.Candle, 1)
+	errChan := make(chan error, 1)
+
+	m.requestChan <- func() error {
+		result, err := m.requestCurrencyCandles(currency, interval)
+		if err != nil {
+			errChan <- err
+			return err
+		}
+
+		response <- result
+		return nil
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case price := <-response:
+		return price, nil
+	case err := <-errChan:
+		return nil, err
+	}
+}
+
+func (m *Mexc) requestCurrencyCandles(currency string, interval types.CandleInterval) ([]types.Candle, error) {
 	intervalStr, ok := mexcIntervals[interval]
 	if !ok {
 		return nil, ErrMexcIntervalNotFound
@@ -143,6 +216,31 @@ func (m *Mexc) GetCurrencyCandles(ctx context.Context, currency string, interval
 }
 
 func (m *Mexc) GetAssets(ctx context.Context) ([]types.Asset, error) {
+	response := make(chan []types.Asset, 1)
+	errChan := make(chan error, 1)
+
+	m.requestChan <- func() error {
+		result, err := m.requestAssets()
+		if err != nil {
+			errChan <- err
+			return err
+		}
+
+		response <- result
+		return nil
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case price := <-response:
+		return price, nil
+	case err := <-errChan:
+		return nil, err
+	}
+}
+
+func (m *Mexc) requestAssets() ([]types.Asset, error) {
 	info := m.clientSpot.AccountInfo()
 
 	data, ok := info.(map[string]interface{})
@@ -184,6 +282,38 @@ func (m *Mexc) GetAssets(ctx context.Context) ([]types.Asset, error) {
 	}
 
 	return result, nil
+}
+
+func (m *Mexc) processRequest() {
+	defer m.requestWg.Done()
+
+	for req := range m.requestChan {
+		m.requestsMu.Lock()
+
+		for len(m.requests) >= mexcMaxRequestPerWindow && time.Since(m.requests[0]) < mexcRequestWindow {
+			m.requestsMu.Unlock()
+			time.Sleep(mexcRequestCoolDownDuration)
+			m.requestsMu.Lock()
+		}
+
+		now := time.Now()
+		threshold := now.Add(-mexcRequestWindow)
+
+		newRequests := []time.Time{}
+		for _, t := range m.requests {
+			if t.After(threshold) {
+				newRequests = append(newRequests, t)
+			}
+		}
+		newRequests = append(newRequests, now)
+
+		m.requests = newRequests
+		m.requestsMu.Unlock()
+
+		if err := req(); err != nil {
+			fmt.Printf("Request failed: %v\n", err)
+		}
+	}
 }
 
 func float64UnixToTime(t float64) time.Time {
