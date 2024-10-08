@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	
+
 	"trade_bot/internal/types"
 )
 
@@ -29,6 +29,12 @@ func (c *Chat) WaitForPumpCurrency(ctx context.Context, channel types.ChannelMes
 				continue
 			}
 
+			if msg != nil && msg.ChatID != nil {
+				fmt.Printf("chat message: %+v chat_id = %s\n", msg, *msg.ChatID)
+			} else {
+				fmt.Printf("chat message: %+v\n", msg)
+			}
+
 			if prevMsg == nil {
 				if strings.Contains(msg.Text, searchString) {
 					fmt.Printf("PRE chat message: %+v\n", msg)
@@ -36,7 +42,7 @@ func (c *Chat) WaitForPumpCurrency(ctx context.Context, channel types.ChannelMes
 					break
 				}
 			} else if prevMsg.ChatID != nil && msg.ChatID != nil && *prevMsg.ChatID == *msg.ChatID {
-				fmt.Printf("chat message: %+v\n", msg)
+				fmt.Printf("found!\n")
 				return msg.Text, nil
 			}
 		}

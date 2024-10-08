@@ -42,7 +42,7 @@ func main() {
 	// telegram wait for pump currency
 	currency, timestamp := getPumpCurrency(ctx)
 	currencyUSDT := currency + "USDT"
-	fmt.Printf("crypto is set to %s timestamp %d\n", currencyUSDT, timestamp.Unix())
+	fmt.Printf("crypto is set to %s at %s\n", currencyUSDT, timestamp.String())
 
 	// get price for currency
 	price := getPrice(currencyUSDT)
@@ -52,26 +52,28 @@ func main() {
 	qty := AmountToSpend / price
 	fmt.Printf("QTY to buy is %f\n", qty)
 
-	// create limit order for given currency
-	buyOrder := types.OrderCreate{
-		Currency: currencyUSDT,
-		Side:     types.OrderSideLong,
-		Type:     types.OrderTypeLimit,
-		Price:    getPrice(currencyUSDT) * 0.95,
-		Quantity: qty,
+	if getAssetQTY(currency) == 0 {
+		// create limit order for given currency
+		buyOrder := types.OrderCreate{
+			Currency: currencyUSDT,
+			Side:     types.OrderSideLong,
+			Type:     types.OrderTypeLimit,
+			Price:    getPrice(currencyUSDT) * 0.95,
+			Quantity: qty,
+		}
+		fmt.Printf("%+v\n", buyOrder)
+		_, err = mexcClient.CreateOrder(ctx, &types.OrderCreate{
+			Currency: currencyUSDT,
+			Side:     types.OrderSideLong,
+			Type:     types.OrderTypeLimit,
+			Price:    price * 1.02,
+			Quantity: qty,
+		})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("order was created\n")
 	}
-	fmt.Printf("%+v\n", buyOrder)
-	_, err = mexcClient.CreateOrder(ctx, &types.OrderCreate{
-		Currency: currencyUSDT,
-		Side:     types.OrderSideLong,
-		Type:     types.OrderTypeLimit,
-		Price:    price * 1.02,
-		Quantity: qty,
-	})
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("order was created\n")
 
 	// close order and sell everything even if we fail!
 	defer func() {
@@ -100,6 +102,13 @@ func main() {
 
 	// wait for a moment to sell
 	for {
+		start := time.Now()
+
+		if timestamp.Minute() != start.Minute() {
+			// new minute - SELL!
+			break
+		}
+
 		candles, err := mexcClient.GetCurrencyCandles(currencyUSDT, types.CandleInterval1m)
 		if err != nil {
 			panic(err)
@@ -107,31 +116,30 @@ func main() {
 
 		var currCandle *types.Candle
 
-		isNextMinute := false
 		for _, candle := range candles {
-			if candle.OpenTime.After(timestamp) {
-				isNextMinute = true
-				break
-			}
 			if candle.OpenTime.Before(timestamp) && candle.CloseTime.After(timestamp) {
 				currCandle = &candle
 			}
 		}
-		if currCandle == nil || isNextMinute {
-			// new minute in the town - SELL!
+		if currCandle == nil {
+			// no candle - SELL!
 			break
 		}
 
 		currPrice := getPrice(currencyUSDT)
 
-		fmt.Printf("candle = %+v, price = %f\n", currCandle, price)
+		fmt.Printf(
+			"curr = %s candle = %+v, price = %f, time = %s\n",
+			time.Now().String(),
+			currCandle,
+			price,
+			time.Since(start).String(),
+		)
 
 		if currPrice/currCandle.High < 0.7 {
 			// we have 30% decrease in price - SELL!
 			break
 		}
-
-		time.Sleep(300 * time.Millisecond)
 	}
 	// ---- WAIT FOR A MOMENT TO SELL ENDED! SEEEEELLLL!!!
 }
