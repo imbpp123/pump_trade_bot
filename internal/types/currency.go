@@ -1,6 +1,7 @@
 package types
 
-type CurrencyPrice struct {
-	Currency string
-	Price    float64
-}
+import "errors"
+
+var (
+	ErrPriceNotFound = errors.New("price not found")
+)

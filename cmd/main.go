@@ -42,7 +42,7 @@ func main() {
 	// telegram wait for pump currency
 	currency, timestamp := getPumpCurrency(ctx)
 	currencyUSDT := currency + "USDT"
-	fmt.Printf("crypto is set to %s\n", currencyUSDT)
+	fmt.Printf("crypto is set to %s timestamp %d\n", currencyUSDT, timestamp.Unix())
 
 	// get price for currency
 	price := getPrice(currencyUSDT)
@@ -100,16 +100,38 @@ func main() {
 
 	// wait for a moment to sell
 	for {
-		candles, err := mexcClient.GetCurrencyCandles(ctx, currency, types.CandleInterval1m)
+		candles, err := mexcClient.GetCurrencyCandles(currencyUSDT, types.CandleInterval1m)
 		if err != nil {
 			panic(err)
 		}
 
-		for _, c := range candles {
-			if c.OpenTime.Before(timestamp) && c.CloseTime.After(timestamp) {
-				return c, nil
+		var currCandle *types.Candle
+
+		isNextMinute := false
+		for _, candle := range candles {
+			if candle.OpenTime.After(timestamp) {
+				isNextMinute = true
+				break
+			}
+			if candle.OpenTime.Before(timestamp) && candle.CloseTime.After(timestamp) {
+				currCandle = &candle
 			}
 		}
+		if currCandle == nil || isNextMinute {
+			// new minute in the town - SELL!
+			break
+		}
+
+		currPrice := getPrice(currencyUSDT)
+
+		fmt.Printf("candle = %+v, price = %f\n", currCandle, price)
+
+		if currPrice/currCandle.High < 0.7 {
+			// we have 30% decrease in price - SELL!
+			break
+		}
+
+		time.Sleep(300 * time.Millisecond)
 	}
 	// ---- WAIT FOR A MOMENT TO SELL ENDED! SEEEEELLLL!!!
 }
