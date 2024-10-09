@@ -15,7 +15,9 @@ import (
 )
 
 const (
-	AmountToSpend float64 = 1.1
+	amountToSpend  float64 = 1
+	orderBuyKoeff  float64 = 1.2
+	orderSellKoeff float64 = 0.8
 )
 
 var (
@@ -44,36 +46,21 @@ func main() {
 	currencyUSDT := currency + "USDT"
 	fmt.Printf("crypto is set to %s at %s\n", currencyUSDT, timestamp.String())
 
-	// get price for currency
-	price := getPrice(currencyUSDT)
-	fmt.Printf("crypto price is %f\n", price)
-
-	// hehe.. qty that we will pump
-	qty := AmountToSpend / price
-	fmt.Printf("QTY to buy is %f\n", qty)
-
-	if getAssetQTY(currency) == 0 {
-		// create limit order for given currency
-		buyOrder := types.OrderCreate{
-			Currency: currencyUSDT,
-			Side:     types.OrderSideLong,
-			Type:     types.OrderTypeLimit,
-			Price:    getPrice(currencyUSDT) * 0.95,
-			Quantity: qty,
-		}
-		fmt.Printf("%+v\n", buyOrder)
-		_, err = mexcClient.CreateOrder(ctx, &types.OrderCreate{
-			Currency: currencyUSDT,
-			Side:     types.OrderSideLong,
-			Type:     types.OrderTypeLimit,
-			Price:    price * 1.02,
-			Quantity: qty,
-		})
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("order was created\n")
+	// create limit order for given currency
+	priceBuy := getPrice(currencyUSDT) * orderBuyKoeff
+	buyOrder := types.OrderCreate{
+		Currency: currencyUSDT,
+		Side:     types.OrderSideLong,
+		Type:     types.OrderTypeLimit,
+		Price:    priceBuy,
+		Quantity: amountToSpend / priceBuy,
 	}
+	fmt.Printf("Buy order %+v\n", buyOrder)
+	_, err = mexcClient.CreateOrder(ctx, &buyOrder)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("order was created\n")
 
 	// close order and sell everything even if we fail!
 	defer func() {
@@ -88,10 +75,10 @@ func main() {
 			Currency: currencyUSDT,
 			Side:     types.OrderSideShort,
 			Type:     types.OrderTypeLimit,
-			Price:    getPrice(currencyUSDT) * 0.95,
+			Price:    getPrice(currencyUSDT) * orderSellKoeff,
 			Quantity: getAssetQTY(currency),
 		}
-		fmt.Printf("%+v\n", sellOrder)
+		fmt.Printf("Sell order %+v\n", sellOrder)
 		_, err = mexcClient.CreateOrder(ctx, &sellOrder)
 		if err != nil {
 			panic(err)
@@ -103,9 +90,13 @@ func main() {
 	// wait for a moment to sell
 	for {
 		start := time.Now()
+		fmt.Printf("Current time: %s\n", start.String())
 
 		if timestamp.Minute() != start.Minute() {
 			// new minute - SELL!
+			break
+		} else if timestamp.Minute() == start.Minute() && start.Second() > 50 {
+			// 10 seconds left in this minute - SELL!!
 			break
 		}
 
@@ -132,10 +123,14 @@ func main() {
 			"curr = %s candle = %+v, price = %f, time = %s\n",
 			time.Now().String(),
 			currCandle,
-			price,
+			priceBuy,
 			time.Since(start).String(),
 		)
 
+		if currPrice/priceBuy > 5 {
+			// don't be greedy 500% is enough - SELL!
+			break
+		}
 		if currPrice/currCandle.High < 0.7 {
 			// we have 30% decrease in price - SELL!
 			break

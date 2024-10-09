@@ -4,8 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"trade_bot/internal/types"
+)
+
+const (
+	pumpChatID string = "1625691880"
 )
 
 type Chat struct{}
@@ -35,6 +40,13 @@ func (c *Chat) WaitForPumpCurrency(ctx context.Context, channel types.ChannelMes
 				fmt.Printf("chat message: %+v\n", msg)
 			}
 
+			if msg.ChatID != nil && *msg.ChatID == pumpChatID && isUppercaseAZOnly(msg.Text) {
+				// this is pump channel message with crypto
+				fmt.Printf("Crypto was said in chat - %s!\n", msg.Text)
+
+				return msg.Text, nil
+			}
+
 			if prevMsg == nil {
 				if strings.Contains(msg.Text, searchString) {
 					fmt.Printf("PRE chat message: %+v\n", msg)
@@ -42,9 +54,18 @@ func (c *Chat) WaitForPumpCurrency(ctx context.Context, channel types.ChannelMes
 					break
 				}
 			} else if prevMsg.ChatID != nil && msg.ChatID != nil && *prevMsg.ChatID == *msg.ChatID {
-				fmt.Printf("found!\n")
+				fmt.Printf("Found after PREV message!\n")
 				return msg.Text, nil
 			}
 		}
 	}
+}
+
+func isUppercaseAZOnly(s string) bool {
+	for _, r := range s {
+		if !unicode.IsUpper(r) || r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
 }
