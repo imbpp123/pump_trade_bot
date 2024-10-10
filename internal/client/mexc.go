@@ -27,6 +27,14 @@ type currencyPrice struct {
 	Price  string `json:"price"`
 }
 
+type orderBatchCreate struct {
+	Type     string `json:"type"`
+	Side     string `json:"side"`
+	Quantity string `json:"quantity"`
+	Price    string `json:"price"`
+	Currency string `json:"symbol"`
+}
+
 type orderCreated struct {
 	Currency string `json:"symbol"`
 	OrderID  string `json:"orderId"`
@@ -159,6 +167,42 @@ func (m *Mexc) GetCurrencyPriceTicker(ctx context.Context, currency string) (flo
 	}
 
 	return floatValue, nil
+}
+
+func (m *Mexc) CreateBatchOrders(
+	ctx context.Context,
+	currency string,
+	side types.OrderSide,
+	orderType types.OrderType,
+	orders []types.OrderCreate,
+) error {
+	queryParams := url.Values{}
+	queryParams.Set("symbol", currency)
+	queryParams.Set("type", mexcOrderType[orderType])
+	queryParams.Set("side", mexcOrderSide[side])
+
+	n := len(orders)
+	orderCreate := make([]orderBatchCreate, n)
+	for i := 0; i < n; i++ {
+		orderCreate[i].Currency = currency
+		orderCreate[i].Type = mexcOrderType[orderType]
+		orderCreate[i].Side = mexcOrderSide[side]
+		orderCreate[i].Price = strconv.FormatFloat(orders[i].Price, 'f', 6, 64)
+		orderCreate[i].Quantity = strconv.FormatFloat(orders[i].Quantity, 'f', 2, 64)
+	}
+
+	bytes, err := json.Marshal(orderCreate)
+	if err != nil {
+		return fmt.Errorf("CreateBatchOrders : %w", err)
+	}
+	queryParams.Set("batchOrders", string(bytes))
+
+	_, err = m.doRequest(ctx, http.MethodPost, "/api/v3/batchOrders", queryParams)
+	if err != nil {
+		return fmt.Errorf("CreateBatchOrders : %w", err)
+	}
+
+	return nil
 }
 
 func (m *Mexc) doRequest(_ context.Context, method, url string, queryParams url.Values) ([]byte, error) {
