@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -19,9 +20,42 @@ func NewChat() *Chat {
 	return &Chat{}
 }
 
+type parseFunc struct {
+	detect func(str string) bool
+	parse  func(str string) string
+}
+
+var symbolParser = map[string]parseFunc{
+	"crypto_pump_signal": {
+		detect: func(msg string) bool {
+			return strings.Contains(msg, "The next message will be the coin name")
+		},
+		parse: func(msg string) string {
+			re := regexp.MustCompile(`(?i)COIN NAME\s*:\s*([A-Z]+)`)
+
+			matches := re.FindStringSubmatch(msg)
+			if len(matches) > 1 {
+				return strings.ToUpper(matches[1])
+			}
+
+			return ""
+		},
+	},
+	"crypto_pump_club": {
+		detect: func(msg string) bool {
+			return strings.Contains(msg, "Next message is the coin name")
+		},
+		parse: func(msg string) string {
+			return strings.ToUpper(msg)
+		},
+	},
+}
+
 func (c *Chat) WaitForPumpCurrency(ctx context.Context, channel types.ChannelMessageIn) (string, error) {
-	searchString := "Next message is the coin name"
-	var prevMsg *types.ChatMessageIn
+	var (
+		chatID     string
+		parserName string
+	)
 
 	fmt.Println("Wait for message")
 
@@ -47,15 +81,20 @@ func (c *Chat) WaitForPumpCurrency(ctx context.Context, channel types.ChannelMes
 				return msg.Text, nil
 			}
 
-			if prevMsg == nil {
-				if strings.Contains(msg.Text, searchString) {
-					fmt.Printf("PRE chat message: %+v\n", msg)
-					prevMsg = msg
-					break
+			if parserName == "" {
+				for chat, parser := range symbolParser {
+					if parser.detect(msg.Text) {
+						if msg.ChatID != nil {
+							chatID = *msg.ChatID
+						}
+						parserName = chat
+						fmt.Printf("PRE chat message for %s in chat id %s: %+v\n", parserName, chatID, msg)
+						break
+					}
 				}
-			} else if prevMsg.ChatID != nil && msg.ChatID != nil && *prevMsg.ChatID == *msg.ChatID {
+			} else if msg.ChatID != nil && chatID == *msg.ChatID && parserName != "" {
 				fmt.Printf("Found after PREV message!\n")
-				return msg.Text, nil
+				return symbolParser[parserName].parse(msg.Text), nil
 			}
 		}
 	}
