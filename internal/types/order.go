@@ -7,6 +7,7 @@ const (
 	OrderSideShort
 )
 
+type OrderID string
 type OrderType int
 
 const (

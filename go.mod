@@ -2,12 +2,7 @@ module trade_bot
 
 go 1.23.1
 
-replace mexc-sdk/mexcsdk => ./pkg/mexcsdk
-
-require (
-	github.com/glebarez/sqlite v1.10.0
-	mexc-sdk/mexcsdk v0.0.0-00010101000000-000000000000
-)
+require github.com/glebarez/sqlite v1.10.0
 
 require (
 	github.com/AnimeKaizoku/cacher v1.0.1 // indirect
@@ -47,8 +42,6 @@ require (
 )
 
 require (
-	github.com/Masterminds/semver/v3 v3.1.1 // indirect
-	github.com/aws/jsii-runtime-go v1.44.1 // indirect
 	github.com/celestix/gotgproto v1.0.0-beta18
 	github.com/gofor-little/env v1.0.18
 )
