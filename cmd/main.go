@@ -131,6 +131,12 @@ func main() {
 			Price:    getPrice(ctx, currencyUSDT) * orderSellKoeff,
 			Quantity: getAssetQTY(ctx, currency),
 		}
+
+		if sellOrder.Quantity == 0 {
+			fmt.Println("Nothing to sell!")
+			return
+		}
+
 		fmt.Printf("Sell order %+v total = %f\n", sellOrder, sellOrder.Quantity*sellOrder.Price)
 		_, err = mexcClient.CreateOrder(ctx, &sellOrder)
 		if err != nil {
