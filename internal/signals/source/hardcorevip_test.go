@@ -19,7 +19,7 @@ func TestHardcoreVIPParse(t *testing.T) {
 	▪️Цель: 18.902
 	▪️Стоп: 17.592`
 
-	handler := source.NewHardcoreVIP("1234")
+	handler := source.NewHardcoreVIP("1234", nil)
 
 	signal, err := handler.ParseSignal(context.Background(), text)
 	assert.NoError(t, err)
