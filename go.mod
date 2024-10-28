@@ -19,8 +19,10 @@ require (
 	github.com/gotd/td v0.102.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/klauspost/compress v1.17.8 // indirect
+	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/lithammer/shortuuid/v3 v3.0.7 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
@@ -45,7 +47,9 @@ require (
 )
 
 require (
+	github.com/ThreeDotsLabs/watermill v1.3.7
 	github.com/celestix/gotgproto v1.0.0-beta18
 	github.com/gofor-little/env v1.0.18
+	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 )
