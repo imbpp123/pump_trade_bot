@@ -1,4 +1,4 @@
-package source
+package handler
 
 import (
 	"context"
@@ -7,36 +7,38 @@ import (
 	"strconv"
 	"strings"
 
+	chatTypes "trade_bot/internal/chat/types"
 	"trade_bot/internal/signals/types"
 )
 
-type exchangeClient interface {
-}
+const (
+	hardcoreVIPBaseSymbol  string = "USDT"
+	hardcoreVIPEntryPoints int    = 3
+	hardcoreVIPChatID      string = "1566432615"
+)
 
 type HardcoreVIP struct {
-	chatID string
-	client exchangeClient
 }
 
-func NewHardcoreVIP(
-	chatID string,
-	client exchangeClient,
-) *HardcoreVIP {
-	return &HardcoreVIP{
-		chatID: chatID,
-		client: client,
-	}
+func NewHardcoreVIP() *HardcoreVIP {
+	return &HardcoreVIP{}
 }
 
-func (h *HardcoreVIP) CanHandle(ctx context.Context, chatID string) bool {
-	return chatID == h.chatID
+func (h *HardcoreVIP) Name() string {
+	return "HardcodeVIP"
 }
 
-func (h *HardcoreVIP) ParseSignal(ctx context.Context, message string) (*types.Signal, error) {
+func (h *HardcoreVIP) CanHandle(ctx context.Context, message *chatTypes.ChatIncomingMessage) bool {
+	return message.ChatID == hardcoreVIPChatID
+}
+
+func (h *HardcoreVIP) ParseSignal(ctx context.Context, chatMessage *chatTypes.ChatIncomingMessage) (*types.Signal, error) {
 	var (
 		signal types.Signal
 		err    error
 	)
+
+	message := chatMessage.Text
 
 	// direction
 	directionPattern := regexp.MustCompile(`📈\s*(LONG|SHORT)\n`)
@@ -45,7 +47,7 @@ func (h *HardcoreVIP) ParseSignal(ctx context.Context, message string) (*types.S
 		return nil, types.ErrParseDirectionNotFound
 
 	}
-	signal.Direction = types.Position(strings.ToLower(directionMatches[1]))
+	signal.Direction = types.Direction(strings.ToLower(directionMatches[1]))
 
 	// symbol
 	symbolPattern := regexp.MustCompile(`Монета:\s*(\w+)\n`)
@@ -111,6 +113,58 @@ func (h *HardcoreVIP) ParseSignal(ctx context.Context, message string) (*types.S
 	return &signal, nil
 }
 
-func (h *HardcoreVIP) ProcessSignal(ctx context.Context, signal *types.Signal) {
-	
+/*
+func (h *HardcoreVIP) ProcessSignal(ctx context.Context, signal *types.Signal) error {
+	currency := signal.Symbol + hardcoreVIPBaseSymbol
+
+	// get price for symbol
+	price, err := h.client.GetPrice(ctx, currency)
+	if err != nil {
+		return fmt.Errorf("HardcoreVIP::ProcessSignal : %w", err)
+	}
+
+	// create orders
+	orders := []types.Order
+
+	// get entry points
+	entryPoints := h.GetEntryPoints(hardcoreVIPEntryPoints, signal.Direction, price, &signal.Entry)
+
+	// fill entries to orders
+
+	fmt.Println(entryPoints)
+
+	// send request to exchange to create orders
+
+	return nil
 }
+
+func (h *HardcoreVIP) GetEntryPoints(pointQTY int, direction types.Direction, price float64, entryPeriod *types.Period) []float64 {
+	var entries []float64
+
+	if pointQTY == 0 {
+		return nil
+	}
+
+	min, max := entryPeriod.Min, entryPeriod.Max
+	if direction == types.LongDirection && price < max {
+		max = price
+	}
+	if direction == types.ShortDirection && price > min {
+		min = price
+	}
+	if pointQTY == 1 {
+		return []float64{(max + min) / 2}
+	}
+
+	distance := max - min
+	max -= distance / 10 // minus 10% from max
+	min += distance / 10 // plus 10% to min
+
+	step := (max - min) / float64(pointQTY-1)
+	for i := 0; i < pointQTY; i++ {
+		entries = append(entries, min+float64(i)*step)
+	}
+
+	return entries
+}
+*/

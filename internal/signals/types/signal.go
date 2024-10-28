@@ -5,16 +5,16 @@ type Period struct {
 	Max float64
 }
 
-type Position string
+type Direction string
 
 const (
-	LongPosition  Position = "long"
-	ShortPosition Position = "short"
+	LongDirection  Direction = "long"
+	ShortDirection Direction = "short"
 )
 
 type Signal struct {
 	Symbol    string
-	Direction Position
+	Direction Direction
 	Leverage  Period
 	Entry     Period
 	Target    Period
