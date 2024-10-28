@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	chatTypes "trade_bot/internal/chat/types"
 	"trade_bot/internal/signals/handler"
 	"trade_bot/internal/signals/types"
 )
@@ -21,7 +22,9 @@ func TestHardcoreVIPParse(t *testing.T) {
 
 	handler := handler.NewHardcoreVIP()
 
-	signal, err := handler.ParseSignal(context.Background(), nil)
+	signal, err := handler.ParseSignal(context.Background(), &chatTypes.ChatIncomingMessage{
+		Text: text,
+	})
 	assert.NoError(t, err)
 
 	assert.NotNil(t, signal)
