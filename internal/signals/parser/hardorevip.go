@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	hardcoreVIPChatID string = "1566432615"
+	hardcoreVIPBaseSymbol string = "USDT"
+	hardcoreVIPChatID     string = "1566432615"
 )
 
 type HardcoreVIP struct {
@@ -39,9 +40,10 @@ func (h *HardcoreVIP) ParseSignal(ctx context.Context, chatMessage *chatTypes.Ch
 	signal := types.NewSignal()
 	signal.Channel = h.Name()
 	signal.Exchange = commonTypes.ExchangeBybit
+	signal.BaseSymbol = hardcoreVIPBaseSymbol
 
 	// position
-	positionPattern := regexp.MustCompile(`📈\s*(LONG|SHORT)\n`)
+	positionPattern := regexp.MustCompile(`📈\s*(LONG|SHORT)`)
 	positionMatches := positionPattern.FindStringSubmatch(message)
 	if len(positionMatches) == 0 {
 		return nil, types.ErrParsePositionNotFound
@@ -53,7 +55,7 @@ func (h *HardcoreVIP) ParseSignal(ctx context.Context, chatMessage *chatTypes.Ch
 	}
 
 	// symbol
-	symbolPattern := regexp.MustCompile(`Монета:\s*(\w+)\n`)
+	symbolPattern := regexp.MustCompile(`Монета:\s*(\w+)`)
 	symbolMatches := symbolPattern.FindStringSubmatch(message)
 	if len(symbolMatches) == 0 {
 		return nil, types.ErrParseSymbolNotFound
@@ -61,10 +63,10 @@ func (h *HardcoreVIP) ParseSignal(ctx context.Context, chatMessage *chatTypes.Ch
 	signal.Symbol = symbolMatches[1]
 
 	// leverage
-	leveragePattern := regexp.MustCompile(`Плечо:\s*([\d]+)-([\d]+)х\n`)
+	leveragePattern := regexp.MustCompile(`Плечо:\s*([\d]+)-([\d]+)х`)
 	leverageMatches := leveragePattern.FindStringSubmatch(message)
 	if len(leverageMatches) == 0 {
-		return nil, types.ErrParseLeverageNotFound
+		return nil, types.ErrParseLeverageIntervalNotFound
 	}
 	leverageMin, err := strconv.ParseFloat(leverageMatches[1], 64)
 	if err != nil {
@@ -77,10 +79,10 @@ func (h *HardcoreVIP) ParseSignal(ctx context.Context, chatMessage *chatTypes.Ch
 	signal.LeverageInterval = commonTypes.NewInterval(leverageMin, leverageMax)
 
 	// entry
-	entryPattern := regexp.MustCompile(`Вход:\s*от\s*([\d.]+)\s*до\s*([\d.]+)\n`)
+	entryPattern := regexp.MustCompile(`Вход:\s*от\s*([\d.]+)\s*до\s*([\d.]+)`)
 	entryMatches := entryPattern.FindStringSubmatch(message)
 	if len(entryMatches) != 3 {
-		return nil, types.ErrParseEntryNotFound
+		return nil, types.ErrParseEntryIntervalNotFound
 	}
 	entryMin, err := strconv.ParseFloat(entryMatches[1], 64)
 	if err != nil {
@@ -93,7 +95,7 @@ func (h *HardcoreVIP) ParseSignal(ctx context.Context, chatMessage *chatTypes.Ch
 	signal.EntryInterval = commonTypes.NewInterval(entryMin, entryMax)
 
 	// target
-	targetPattern := regexp.MustCompile(`Цель:\s*([\d.]+)\n`)
+	targetPattern := regexp.MustCompile(`Цель:\s*([\d.]+)`)
 	targetMatches := targetPattern.FindStringSubmatch(message)
 	if len(targetMatches) != 2 {
 		return nil, types.ErrParseTargetNotFound

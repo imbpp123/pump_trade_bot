@@ -74,8 +74,35 @@ func TestHardcoreVIPParseShort(t *testing.T) {
 		assert.Equal(t, 18.154, signal.EntryInterval.Min)
 		assert.Equal(t, 18.715, signal.EntryInterval.Max)
 	}
-	
+
 	assert.Equal(t, 17.902, signal.Target)
 	assert.Equal(t, 18.592, signal.Stop)
 }
 
+func TestHardcoreVIPParsePosition(t *testing.T) {
+	text := "📈 LONG \n \n▪️Монета: SOL\n▪️Плечо: 25-50х\n▪️Вход: от 181.42 до 175.98\n▪️Цель: 183.23\n▪️Стоп: 170.53"
+
+	handler := parser.NewHardcoreVIP()
+
+	signal, err := handler.ParseSignal(context.Background(), &chatTypes.ChatIncomingMessage{
+		Text: text,
+	})
+	assert.NoError(t, err)
+
+	assert.NotNil(t, signal)
+	assert.Equal(t, "SOL", signal.Symbol)
+	assert.Equal(t, commonTypes.PositionLong, signal.Position)
+
+	if assert.NotNil(t, signal.LeverageInterval) {
+		assert.Equal(t, 25.0, signal.LeverageInterval.Min)
+		assert.Equal(t, 50.0, signal.LeverageInterval.Max)
+	}
+
+	if assert.NotNil(t, signal.EntryInterval) {
+		assert.Equal(t, 175.98, signal.EntryInterval.Min)
+		assert.Equal(t, 181.42, signal.EntryInterval.Max)
+	}
+
+	assert.Equal(t, 183.23, signal.Target)
+	assert.Equal(t, 170.53, signal.Stop)
+}
