@@ -95,7 +95,7 @@ func (h *HardcoreVIP) ParseSignal(ctx context.Context, chatMessage *chatTypes.Ch
 	signal.EntryInterval = commonTypes.NewInterval(entryMin, entryMax)
 
 	// target
-	targetPattern := regexp.MustCompile(`Цель:\s*([\d.]+)`)
+	targetPattern := regexp.MustCompile(`Цель:\s*([\d.]+)\n`)
 	targetMatches := targetPattern.FindStringSubmatch(message)
 	if len(targetMatches) != 2 {
 		return nil, types.ErrParseTargetNotFound
