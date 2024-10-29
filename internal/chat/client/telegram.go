@@ -124,20 +124,16 @@ func (t *Telegram) messageHandler(ctx *ext.Context, update *ext.Update) error {
 		return nil
 	}
 
-	chatMessage := types.ChatIncomingMessage{
-		ChatType: types.ChatTypeTelegram,
-		Text:     msg.Text,
+	chatID := ""
+	if chat := update.GetChannel(); chat != nil {
+		chatID = strconv.FormatInt(chat.ID, 10)
 	}
 
-	chat := update.GetChannel()
-	if chat != nil {
-		chatMessage.ChatID = strconv.FormatInt(chat.ID, 10)
-	}
-
-	user := update.GetUserChat()
-	if user != nil {
-		chatMessage.UserID = strconv.FormatInt(user.ID, 10)
-	}
+	chatMessage := types.NewChatIncomingMessage(
+		types.ChatTypeTelegram,
+		msg.Text,
+		chatID,
+	)
 
 	rawMessage, err := json.Marshal(chatMessage)
 	if err != nil {
@@ -145,15 +141,15 @@ func (t *Telegram) messageHandler(ctx *ext.Context, update *ext.Update) error {
 			WithError(err).
 			Error("Failed to marshal chat message to JSON")
 
-		return fmt.Errorf("Telegram::NewMessageHandler : %w", err)
+		return fmt.Errorf("Telegram::messageHandler : %w", err)
 	}
 
 	if err := t.messagePublisher.Publish(t.messageTopic, message.NewMessage(watermill.NewUUID(), rawMessage)); err != nil {
 		t.log.
 			WithError(err).
-			Error("Failed to publish message to topic 'example.topic'")
+			Error("Failed to publish message")
 
-		return fmt.Errorf("Telegram::NewMessageHandler : %w", err)
+		return fmt.Errorf("Telegram::messageHandler : %w", err)
 	}
 
 	return nil
