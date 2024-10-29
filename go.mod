@@ -13,7 +13,6 @@ require (
 	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/go-faster/jx v1.1.0 // indirect
 	github.com/go-faster/xor v1.0.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gotd/ige v0.2.2 // indirect
 	github.com/gotd/neo v0.1.5 // indirect
 	github.com/gotd/td v0.102.0 // indirect
@@ -50,6 +49,7 @@ require (
 	github.com/ThreeDotsLabs/watermill v1.3.7
 	github.com/celestix/gotgproto v1.0.0-beta18
 	github.com/gofor-little/env v1.0.18
+	github.com/google/uuid v1.6.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 )
