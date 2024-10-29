@@ -1,5 +1,6 @@
 /.env
 userbot*
+data_storage.sqlite
 /vendor
 /.vscode
 .DS_Store

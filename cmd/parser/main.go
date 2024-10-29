@@ -9,11 +9,14 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
+	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	"trade_bot/internal/chat/client"
 	"trade_bot/internal/signals"
-	"trade_bot/internal/signals/handler"
+	"trade_bot/internal/signals/parser"
+	"trade_bot/internal/signals/repository"
 )
 
 const (
@@ -41,6 +44,12 @@ func main() {
 		log.Info("Received termination signal, shutting down gracefully...")
 		cancel()
 	}()
+
+	// initialize gorm storage
+	db, err := gorm.Open(sqlite.Open(os.Getenv("SQLITE_DATABASE")), &gorm.Config{})
+	if err != nil {
+		log.Fatal("failed to connect database")
+	}
 
 	// Initialize PubSub
 	pubSub := gochannel.NewGoChannel(
@@ -72,28 +81,33 @@ func main() {
 		MessageTopic: chatMessageTopic,
 	})
 	if err != nil {
-		log.Fatalf("Failed to initialize Telegram client: %w", err)
+		log.Fatalf("Failed to initialize Telegram client: %v", err)
 	}
 
 	// Start receiving messages
 	if err := tgClient.Start(ctx); err != nil {
-		log.Fatalf("Failed to start Telegram client: %w", err)
+		log.Fatalf("Failed to start Telegram client: %v", err)
 	}
 
 	log.Info("Waiting for messages...")
 
 	// initialize message parser
+	signalRepository, err := repository.NewGormSignal(db)
+	if err != nil {
+		log.Fatalf("Failed to create signal repository: %v", err)
+	}
 	parser := signals.NewParser(&signals.ParserOptions{
 		Handlers: []signals.Handler{
-			handler.NewHardcoreVIP(),
+			parser.NewHardcoreVIP(),
 		},
 		Logger:            log,
 		MessageSubscriber: pubSub,
 		MessageTopic:      chatMessageTopic,
 		SignalTopic:       signalMessageTopic,
 		SignalPublisher:   pubSub,
+		SignalRepository:  signalRepository,
 	})
 	if err := parser.Start(ctx); err != nil {
-		log.Fatalf("Failed to start parsing messages: %w", err)
+		log.Fatalf("Failed to parse messages: %v", err)
 	}
 }
