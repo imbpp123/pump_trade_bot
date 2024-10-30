@@ -14,7 +14,8 @@ import (
 	"strconv"
 	"time"
 
-	"trade_bot/internal/types"
+	"trade_bot/internal/client/types"
+	commonTypes "trade_bot/internal/types"
 )
 
 const (
@@ -25,14 +26,6 @@ const (
 type currencyPrice struct {
 	Symbol string `json:"symbol"`
 	Price  string `json:"price"`
-}
-
-type orderBatchCreate struct {
-	Type     string `json:"type"`
-	Side     string `json:"side"`
-	Quantity string `json:"quantity"`
-	Price    string `json:"price"`
-	Currency string `json:"symbol"`
 }
 
 type orderCreated struct {
@@ -58,29 +51,17 @@ type Mexc struct {
 }
 
 var (
-	mexcIntervals = map[types.CandleInterval]string{
-		types.CandleInterval1m:  "1m",
-		types.CandleInterval5m:  "5m",
-		types.CandleInterval15m: "15m",
-		types.CandleInterval30m: "30m",
-		types.CandleInterval1h:  "60m",
-		types.CandleInterval4h:  "4h",
-		types.CandleInterval1d:  "1d",
-		types.CandleInterval1W:  "1W",
-		types.CandleInterval1M:  "1M",
+	mexcOrderType = map[commonTypes.OrderType]string{
+		commonTypes.OrderTypeLimit:             "LIMIT",
+		commonTypes.OrderTypeMarket:            "MARKET",
+		commonTypes.OrderTypeLimitMarket:       "LIMIT_MARKET",
+		commonTypes.OrderTypeImmediateOrCancel: "IMMEDIATE_OR_CANCEL",
+		commonTypes.OrderTypeFillOrKill:        "FILL_OR_KILL",
 	}
 
-	mexcOrderType = map[types.OrderType]string{
-		types.OrderTypeLimit:             "LIMIT",
-		types.OrderTypeMarket:            "MARKET",
-		types.OrderTypeLimitMarket:       "LIMIT_MARKET",
-		types.OrderTypeImmediateOrCancel: "IMMEDIATE_OR_CANCEL",
-		types.OrderTypeFillOrKill:        "FILL_OR_KILL",
-	}
-
-	mexcOrderSide = map[types.OrderSide]string{
-		types.OrderSideLong:  "BUY",
-		types.OrderSideShort: "SELL",
+	mexcOrderPosition = map[commonTypes.Position]string{
+		commonTypes.PositionLong:  "BUY",
+		commonTypes.PositionShort: "SELL",
 	}
 )
 
@@ -88,7 +69,6 @@ var (
 	ErrMexcIntervalNotFound    = errors.New("mexc interval not found")
 	ErrMexcOrderSideNotFound   = errors.New("mexc order side not found")
 	ErrMexcOrderTypeNotFound   = errors.New("mexc order type not found")
-	ErrMexcOrderStatusNotFound = errors.New("mexc order status not found")
 	ErrAssetNotFound           = errors.New("asset not found")
 )
 
@@ -102,39 +82,41 @@ func NewMexc(
 	}
 }
 
-func (m *Mexc) CreateOrder(ctx context.Context, order *types.OrderCreate) (types.OrderID, error) {
-	orderSide, ok := mexcOrderSide[order.Side]
+func (m *Mexc) CreateSpotOrder(ctx context.Context, order *types.SpotOrder) error {
+	orderPosition, ok := mexcOrderPosition[order.Position]
 	if !ok {
-		return "", ErrMexcOrderSideNotFound
+		return ErrMexcOrderSideNotFound
 	}
 
 	orderType, ok := mexcOrderType[order.Type]
 	if !ok {
-		return "", ErrMexcOrderTypeNotFound
+		return ErrMexcOrderTypeNotFound
 	}
 
 	queryParams := url.Values{}
-	queryParams.Set("symbol", order.Currency)
-	queryParams.Set("side", orderSide)
+	queryParams.Set("symbol", fmt.Sprintf("%s%s", order.Symbol, order.BaseSymbol))
+	queryParams.Set("side", orderPosition)
 	queryParams.Set("type", orderType)
 	queryParams.Set("quantity", strconv.FormatFloat(order.Quantity, 'f', 6, 64))
-	queryParams.Set("price", strconv.FormatFloat(order.Price, 'f', 6, 64))
+	queryParams.Set("price", strconv.FormatFloat(order.Entry, 'f', 6, 64))
 
 	bytes, err := m.doRequest(ctx, http.MethodPost, "/api/v3/order", queryParams)
 	if err != nil {
-		return "", fmt.Errorf("CreateOrder : %w", err)
+		return fmt.Errorf("Mexc::CreateOrder : %w", err)
 	}
 
 	var orderRecv orderCreated
 	err = json.Unmarshal(bytes, &orderRecv)
 	if err != nil {
-		return "", fmt.Errorf("CreateOrder : %w", err)
+		return fmt.Errorf("Mexc::CreateOrder : %w", err)
 	}
 
-	return types.OrderID(orderRecv.OrderID), nil
+	return nil
 }
 
-func (m *Mexc) CancelAllOrders(ctx context.Context, currency string) error {
+func (m *Mexc) CancelAllOrders(ctx context.Context, symbol, baseSymbol string) error {
+	currency := fmt.Sprintf("%s%s", symbol, baseSymbol)
+
 	queryParams := url.Values{}
 	queryParams.Set("symbol", currency)
 
@@ -146,7 +128,9 @@ func (m *Mexc) CancelAllOrders(ctx context.Context, currency string) error {
 	return nil
 }
 
-func (m *Mexc) GetCurrencyPriceTicker(ctx context.Context, currency string) (float64, error) {
+func (m *Mexc) GetPrice(ctx context.Context, symbol, baseSymbol string) (float64, error) {
+	currency := fmt.Sprintf("%s%s", symbol, baseSymbol)
+
 	queryParams := url.Values{}
 	queryParams.Set("symbol", currency)
 
@@ -167,42 +151,6 @@ func (m *Mexc) GetCurrencyPriceTicker(ctx context.Context, currency string) (flo
 	}
 
 	return floatValue, nil
-}
-
-func (m *Mexc) CreateBatchOrders(
-	ctx context.Context,
-	currency string,
-	side types.OrderSide,
-	orderType types.OrderType,
-	orders []types.OrderCreate,
-) error {
-	queryParams := url.Values{}
-	queryParams.Set("symbol", currency)
-	queryParams.Set("type", mexcOrderType[orderType])
-	queryParams.Set("side", mexcOrderSide[side])
-
-	n := len(orders)
-	orderCreate := make([]orderBatchCreate, n)
-	for i := 0; i < n; i++ {
-		orderCreate[i].Currency = currency
-		orderCreate[i].Type = mexcOrderType[orderType]
-		orderCreate[i].Side = mexcOrderSide[side]
-		orderCreate[i].Price = strconv.FormatFloat(orders[i].Price, 'f', 6, 64)
-		orderCreate[i].Quantity = strconv.FormatFloat(orders[i].Quantity, 'f', 2, 64)
-	}
-
-	bytes, err := json.Marshal(orderCreate)
-	if err != nil {
-		return fmt.Errorf("CreateBatchOrders : %w", err)
-	}
-	queryParams.Set("batchOrders", string(bytes))
-
-	_, err = m.doRequest(ctx, http.MethodPost, "/api/v3/batchOrders", queryParams)
-	if err != nil {
-		return fmt.Errorf("CreateBatchOrders : %w", err)
-	}
-
-	return nil
 }
 
 func (m *Mexc) doRequest(_ context.Context, method, url string, queryParams url.Values) ([]byte, error) {
@@ -240,100 +188,23 @@ func (m *Mexc) doRequest(_ context.Context, method, url string, queryParams url.
 	return body, nil
 }
 
-func (m *Mexc) GetCurrencyCandles(ctx context.Context, currency string, interval types.CandleInterval) ([]types.Candle, error) {
-	intervalStr, ok := mexcIntervals[interval]
-	if !ok {
-		return nil, ErrMexcIntervalNotFound
-	}
-
-	queryParams := url.Values{}
-	queryParams.Set("symbol", currency)
-	queryParams.Set("interval", intervalStr)
-	queryParams.Set("limit", strconv.Itoa(mexcCandleLimit)) // don't need default 500 candles..
-
-	bytes, err := m.doRequest(ctx, http.MethodGet, "/api/v3/klines", queryParams)
-	if err != nil {
-		return nil, fmt.Errorf("GetCurrencyCandles : %w", err)
-	}
-
-	var candles [][]interface{}
-	err = json.Unmarshal(bytes, &candles)
-	if err != nil {
-		return nil, fmt.Errorf("GetCurrencyCandles : %w", err)
-	}
-
-	var result []types.Candle
-
-	for _, kline := range candles {
-		candle := types.Candle{
-			Interval: interval,
-		}
-
-		openTimeFloat, ok := kline[0].(float64)
-		if !ok {
-			return nil, fmt.Errorf("can't cast open time: %v", kline)
-		}
-		candle.OpenTime = float64UnixToTime(openTimeFloat)
-
-		candle.Open, err = anyStringToFloat64(kline[1])
-		if err != nil {
-			return nil, fmt.Errorf("can't parse open: %w", err)
-		}
-
-		candle.High, err = anyStringToFloat64(kline[2])
-		if err != nil {
-			return nil, fmt.Errorf("can't parse high: %w", err)
-		}
-
-		candle.Low, err = anyStringToFloat64(kline[3])
-		if err != nil {
-			return nil, fmt.Errorf("can't parse low: %w", err)
-		}
-
-		candle.Close, err = anyStringToFloat64(kline[4])
-		if err != nil {
-			return nil, fmt.Errorf("can't parse close: %w", err)
-		}
-
-		candle.Volume, err = anyStringToFloat64(kline[5])
-		if err != nil {
-			return nil, fmt.Errorf("can't parse volume: %w", err)
-		}
-
-		closeTimeFloat, ok := kline[6].(float64)
-		if !ok {
-			return nil, fmt.Errorf("can't cast close time: %v", kline)
-		}
-		candle.CloseTime = float64UnixToTime(closeTimeFloat)
-
-		candle.AssetVolume, err = anyStringToFloat64(kline[7])
-		if err != nil {
-			return nil, fmt.Errorf("can't parse asset volume: %w", err)
-		}
-
-		result = append(result, candle)
-	}
-
-	return result, nil
-}
-
-func (m *Mexc) GetAssets(ctx context.Context, currency string) (float64, error) {
+func (m *Mexc) GetAssets(ctx context.Context, symbol string) (float64, error) {
 	bytes, err := m.doRequest(ctx, http.MethodGet, "/api/v3/account", url.Values{})
 	if err != nil {
-		return 0, fmt.Errorf("CreateOrder : %w", err)
+		return 0, fmt.Errorf("Mexc::GetAssets : %w", err)
 	}
 
 	var account accountMexc
 	err = json.Unmarshal(bytes, &account)
 	if err != nil {
-		return 0, fmt.Errorf("GetAssets : %w", err)
+		return 0, fmt.Errorf("Mexc::GetAssets : %w", err)
 	}
 
 	for _, balance := range account.Balances {
-		if balance.Currency == currency {
+		if balance.Currency == symbol {
 			floatValue, err := strconv.ParseFloat(balance.Free, 64)
 			if err != nil {
-				return 0, fmt.Errorf("GetAssets : %w", err)
+				return 0, fmt.Errorf("Mexc::GetAssets : %w", err)
 			}
 
 			return floatValue, nil
@@ -341,25 +212,4 @@ func (m *Mexc) GetAssets(ctx context.Context, currency string) (float64, error) 
 	}
 
 	return 0, ErrAssetNotFound
-}
-
-func float64UnixToTime(t float64) time.Time {
-	sec := int64(t / 1000)
-	nsec := int64((t - float64(sec*1000)) * 1e6)
-
-	return time.Unix(sec, nsec)
-}
-
-func anyStringToFloat64(str interface{}) (float64, error) {
-	strValue, ok := str.(string)
-	if !ok {
-		return 0, fmt.Errorf("can't cast str: %v", str)
-	}
-
-	floatValue, err := strconv.ParseFloat(strValue, 64)
-	if err != nil {
-		return 0, fmt.Errorf("can't parse str to float: %w", err)
-	}
-
-	return floatValue, nil
 }

@@ -8,15 +8,7 @@ const (
 )
 
 type OrderID string
-type OrderType int
 
-const (
-	OrderTypeLimit OrderType = iota
-	OrderTypeMarket
-	OrderTypeLimitMarket
-	OrderTypeImmediateOrCancel
-	OrderTypeFillOrKill
-)
 
 type OrderStatus int
 

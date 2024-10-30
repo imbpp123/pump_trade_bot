@@ -6,6 +6,8 @@ type (
 	Position      string
 	Exchange      string
 	SignalChannel string
+
+	OrderType string
 )
 
 const (
@@ -18,6 +20,12 @@ const (
 	PositionLong  Position = "short"
 
 	SignalChannelHardcoreVIP SignalChannel = "hardcoreVIP"
+
+	OrderTypeLimit             OrderType = "limit"
+	OrderTypeMarket            OrderType = "market"
+	OrderTypeLimitMarket       OrderType = "limit_market"
+	OrderTypeImmediateOrCancel OrderType = "immediate_or_cancel"
+	OrderTypeFillOrKill        OrderType = "fill_or_kill"
 )
 
 type Interval struct {

@@ -152,5 +152,11 @@ func (t *Telegram) messageHandler(ctx *ext.Context, update *ext.Update) error {
 		return fmt.Errorf("Telegram::messageHandler : %w", err)
 	}
 
+	t.log.
+		WithFields(logrus.Fields{
+			"chatID": chatMessage.ChatID,
+			"text":   chatMessage.Text,
+		}).Debug("Telegram message received")
+
 	return nil
 }
